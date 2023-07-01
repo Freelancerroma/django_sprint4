@@ -19,11 +19,11 @@ class PostListView(ListView):
     template_name = 'blog/index.html'
     queryset = Post.time_pub.select_related(
         'category', 'location', 'author'
-        ).filter(
+    ).filter(
             category__is_published=True,
-        ).annotate(
+    ).annotate(
             comment_count=Count('comments')
-        )
+    )
     ordering = '-pub_date'
     paginate_by = NUMS_OF_POST_DISPLAY
 
