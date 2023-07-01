@@ -20,9 +20,9 @@ class PostListView(ListView):
     queryset = Post.time_pub.select_related(
         'category', 'location', 'author'
     ).filter(
-            category__is_published=True,
+        category__is_published=True,
     ).annotate(
-            comment_count=Count('comments')
+        comment_count=Count('comments')
     )
     ordering = '-pub_date'
     paginate_by = NUMS_OF_POST_DISPLAY
@@ -180,13 +180,13 @@ class UserListView(ListView):
             )
         return Post.time_pub.select_related(
             'category', 'location', 'author'
-            ).filter(
+        ).filter(
             author=self.author, category__is_published=True,
-            ).order_by(
+        ).order_by(
             '-pub_date'
-            ).annotate(
+        ).annotate(
             comment_count=Count('comments')
-            )
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
