@@ -3,6 +3,7 @@ from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.views import View
 from django.views.generic import (CreateView, DeleteView, DetailView, ListView,
                                   UpdateView)
 
@@ -18,11 +19,11 @@ class PostListView(ListView):
     model = Post
     template_name = 'blog/index.html'
     queryset = Post.time_pub.select_related(
-        'category', 'location', 'author'
+        'category', 'location', 'author',
     ).filter(
         category__is_published=True,
     ).annotate(
-        comment_count=Count('comments')
+        comment_count=Count('comments'),
     )
     ordering = '-pub_date'
     paginate_by = NUMS_OF_POST_DISPLAY
@@ -38,20 +39,22 @@ class PostDetailView(DetailView):
     def get_queryset(self):
         post = get_object_or_404(
             Post.objects.filter(
-                id=self.kwargs['post_id']
+                id=self.kwargs['post_id'],
             )
         )
         if post.author == self.request.user:
-            return Post.objects.filter(id=self.kwargs['post_id'])
-        return Post.time_pub.filter(id=self.kwargs['post_id'])
+            return Post.objects.filter(id=self.kwargs['post_id'],)
+        return Post.time_pub.filter(id=self.kwargs['post_id'],)
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['form'] = CommentForm()
-        context['comments'] = self.object.comments.filter(
-            post=self.object.id
-        ).order_by(
-            'created_at'
+        context = dict(
+            **super().get_context_data(**kwargs),
+            form=CommentForm(),
+            comments=self.object.comments.filter(
+                post=self.object.id,
+            ).order_by(
+                'created_at',
+            ),
         )
         return context
 
@@ -66,23 +69,25 @@ class PostCategoryView(ListView):
 
     def get_queryset(self):
         category_slug = self.kwargs['category_slug']
-        self.category_posts = get_object_or_404(
+        self.category_post = get_object_or_404(
             Category.objects.filter(
                 is_published=True,
                 slug=category_slug,
             )
         )
         return super().get_queryset().filter(
-            category=self.category_posts,
+            category=self.category_post,
             pub_date__lte=timezone.now(),
             is_published=True,
         ).annotate(
-            comment_count=Count('comments')
+            comment_count=Count('comments'),
         )
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['category'] = self.category_posts
+        context = dict(
+            **super().get_context_data(**kwargs),
+            category=self.category_post,
+        )
         return context
 
 
@@ -100,15 +105,14 @@ class PostCreateView(LoginRequiredMixin, CreateView):
     def get_success_url(self):
         return reverse(
             'blog:profile',
-            kwargs={'username': self.request.user}
+            kwargs={'username': self.request.user},
         )
 
 
-class PostUpdateView(LoginRequiredMixin, UpdateView):
-    """Редактирование поста"""
+class PostMixinView(LoginRequiredMixin, View):
+    """Mixin для классов PostUpdateView, PostDeleteView"""
 
     model = Post
-    form_class = PostForm
     template_name = 'blog/create.html'
     pk_url_kwarg = 'post_id'
 
@@ -116,41 +120,37 @@ class PostUpdateView(LoginRequiredMixin, UpdateView):
         if self.get_object().author != request.user:
             return redirect(
                 'blog:post_detail',
-                self.kwargs['post_id']
+                self.kwargs['post_id'],
             )
         return super().dispatch(request, *args, **kwargs)
+
+
+class PostUpdateView(PostMixinView, UpdateView):
+    """Редактирование поста"""
+
+    form_class = PostForm
 
     def get_success_url(self):
         return reverse(
             'blog:post_detail',
-            kwargs={'post_id': self.kwargs['post_id']}
+            kwargs={'post_id': self.kwargs['post_id']},
         )
 
 
-class PostDeleteView(LoginRequiredMixin, DeleteView):
+class PostDeleteView(PostMixinView, DeleteView):
     """Удаление поста"""
 
-    model = Post
-    template_name = 'blog/create.html'
-    pk_url_kwarg = 'post_id'
-
-    def dispatch(self, request, *args, **kwargs):
-        if self.get_object().author != request.user:
-            return redirect(
-                'blog:post_detail',
-                self.kwargs['post_id']
-            )
-        return super().dispatch(request, *args, **kwargs)
-
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['form'] = PostForm(instance=self.object)
+        context = dict(
+            **super().get_context_data(**kwargs),
+            form=PostForm(instance=self.object),
+        )
         return context
 
     def get_success_url(self):
         return reverse_lazy(
             'blog:profile',
-            kwargs={'username': self.request.user}
+            kwargs={'username': self.request.user},
         )
 
 
@@ -170,27 +170,30 @@ class UserListView(ListView):
         )
         if self.author == self.request.user:
             return Post.objects.select_related(
-                'category', 'location', 'author'
+                'category', 'location', 'author',
             ).filter(
-                author=self.author
+                author=self.author,
             ).order_by(
-                '-pub_date'
+                '-pub_date',
             ).annotate(
-                comment_count=Count('comments')
+                comment_count=Count('comments'),
             )
         return Post.time_pub.select_related(
-            'category', 'location', 'author'
+            'category', 'location', 'author',
         ).filter(
-            author=self.author, category__is_published=True,
+            author=self.author,
+            category__is_published=True,
         ).order_by(
-            '-pub_date'
+            '-pub_date',
         ).annotate(
-            comment_count=Count('comments')
+            comment_count=Count('comments'),
         )
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['profile'] = self.author
+        context = dict(
+            **super().get_context_data(**kwargs),
+            profile=self.author,
+        )
         return context
 
 
@@ -207,7 +210,7 @@ class UserUpdateView(LoginRequiredMixin, UpdateView):
     def get_success_url(self):
         return reverse(
             'blog:profile',
-            kwargs={'username': self.request.user}
+            kwargs={'username': self.request.user},
         )
 
 
@@ -222,7 +225,7 @@ class CommentCreateView(LoginRequiredMixin, CreateView):
     def dispatch(self, request, *args, **kwargs):
         self.posts = get_object_or_404(
             Post.objects.filter(
-                id=self.kwargs['post_id']
+                id=self.kwargs['post_id'],
             )
         )
         return super().dispatch(request, *args, **kwargs)
@@ -235,12 +238,12 @@ class CommentCreateView(LoginRequiredMixin, CreateView):
     def get_success_url(self):
         return reverse(
             'blog:post_detail',
-            kwargs={'post_id': self.kwargs['post_id']}
+            kwargs={'post_id': self.kwargs['post_id']},
         )
 
 
-class CommentUpdateView(LoginRequiredMixin, UpdateView):
-    """Редактирование комментария"""
+class CommentMixinView(LoginRequiredMixin, View):
+    """Mixin для CommentUpdateView, CommentDeleteView"""
 
     model = Comment
     form_class = CommentForm
@@ -248,42 +251,20 @@ class CommentUpdateView(LoginRequiredMixin, UpdateView):
     pk_url_kwarg = 'comment_id'
 
     def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(
-            Comment.objects.filter(
-                id=kwargs['comment_id']
-            )
-        )
-        if instance.author != request.user:
-            return redirect('blog:post_detail', self.kwargs['post_id'])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_success_url(self):
-        return reverse(
-            'blog:post_detail',
-            kwargs={'post_id': self.kwargs['post_id']}
-        )
-
-
-class CommentDeleteView(LoginRequiredMixin, DeleteView):
-    """Удаление комментария"""
-
-    model = Comment
-    form_class = CommentForm
-    template_name = 'blog/comment.html'
-    pk_url_kwarg = 'comment_id'
-
-    def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(
-            Comment.objects.filter(
-                id=kwargs['comment_id']
-            )
-        )
-        if instance.author != request.user:
-            return redirect('blog:post_detail', self.kwargs['post_id'])
+        if self.get_object().author != request.user:
+            return redirect('blog:post_detail', self.kwargs['post_id'],)
         return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return reverse_lazy(
             'blog:post_detail',
-            kwargs={'post_id': self.kwargs['post_id']}
+            kwargs={'post_id': self.kwargs['post_id']},
         )
+
+
+class CommentUpdateView(CommentMixinView, UpdateView):
+    """Редактирование комментария"""
+
+
+class CommentDeleteView(CommentMixinView, DeleteView):
+    """Удаление комментария"""
