@@ -42,3 +42,4 @@ tomli==2.0.1
 traitlets==5.9.0
 wcwidth==0.2.6
 yapf==0.32.0
+python-dotenv==1.0.0
